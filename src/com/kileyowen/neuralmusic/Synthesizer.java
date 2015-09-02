@@ -1,6 +1,8 @@
 package com.kileyowen.neuralmusic;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -11,11 +13,18 @@ public class Synthesizer {
 	private AudioFormat af;
 	private SourceDataLine sdl;
 	private ByteBuffer bb;
-	private final int AUDIO_RANGE;
+	private final short AUDIO_RANGE;
+	private double minFreq, maxFreq;
+	private double maxDur;
+	private double minDur;
 
-	public Synthesizer() {
+	public Synthesizer(double minFreq, double maxFreq) {
+		this.minFreq = minFreq;
+		this.maxFreq = maxFreq;
 		af = new AudioFormat(44100, 16, 2, true, false);
-		AUDIO_RANGE = (int) (Math.pow(2, af.getSampleSizeInBits()) - 1);
+		this.maxDur = af.getFrameRate();
+		this.minDur = af.getFrameRate() / 100;
+		AUDIO_RANGE = Short.MAX_VALUE;
 		try {
 			sdl = AudioSystem.getSourceDataLine(af);
 			sdl.open();
@@ -35,21 +44,51 @@ public class Synthesizer {
 		}
 		sdl.write(bb.array(), 0, bb.capacity());
 	}
-	
-	public void play(double[] samples){
-		for(int sampleIndex = 0;sampleIndex < samples.length;sampleIndex++){
+
+	public void play(double[] samples) {
+		for (int sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
 			play(samples[sampleIndex]);
 		}
 	}
-	
-	public void playNeural(double sampleNeural){
-		play(sampleNeural * 2 - 1);
-	}
-	
-	public void playNeural(double[] samplesNeural){
-		for(int sampleIndex = 0;sampleIndex < samplesNeural.length;sampleIndex++){
-			playNeural(samplesNeural[sampleIndex]);
+
+	public void playNote(double frequencySample, double duration) {
+		double frequency = frequencySample * (maxFreq - minFreq) + minFreq;
+		for (int sampleIndex = 0; sampleIndex < duration; sampleIndex++) {
+			play(Math.sin(sampleIndex * frequency / af.getFrameRate() * 2
+					* Math.PI));
 		}
+	}
+
+	public void playNote(double[] frequencySamples, double[] durations) {
+		for (int sampleIndex = 0; sampleIndex < frequencySamples.length; sampleIndex++) {
+			playNote(frequencySamples[sampleIndex], durations[sampleIndex]);
+		}
+	}
+
+	public void playNotesNeural(List<Double> neuralOutput) {
+		double[] freqs = new double[neuralOutput.size() / 2];
+		double[] durs = freqs.clone();
+		for (int i = 0; i < freqs.length; i++) {
+			freqs[i] = neuralToSample(neuralOutput.get(i * 2));
+			durs[i] = neuralToDur(neuralOutput.get(i * 2 + 1));
+		}
+		playNote(freqs, durs);
+	}
+
+	public double neuralToDur(double neural) {
+		return neural * (maxDur - minDur) + minDur;
+	}
+
+	public double neuralToSample(double neural) {
+		return neural * 2 - 1;
+	}
+
+	public double[] neuralToSample(double[] neural) {
+		double[] copy = new double[neural.length];
+		for (int sampleIndex = 0; sampleIndex < copy.length; sampleIndex++) {
+			copy[sampleIndex] = neuralToSample(neural[sampleIndex]);
+		}
+		return copy;
 	}
 
 	public void stop() {
@@ -58,8 +97,16 @@ public class Synthesizer {
 	}
 
 	public static void main(String[] args) {
-		Synthesizer synth = new Synthesizer();
-		
+		Synthesizer synth = new Synthesizer(20, 4400);
+		NeuralRecorder recorder = new NeuralRecorder("/assets/", "neural.dat");
+		NeuralNetwork network;
+		if ((network = recorder.readNeural()) == null) {
+			network = new NeuralNetwork(1, (int) (10 * 2), 1, -1, 1);
+		}
+		List<Double> input = new ArrayList<Double>();
+		input.add(0.5);
+		synth.playNotesNeural(network.fire(input));
+		recorder.writeNeural(network);
 		synth.stop();
 	}
 }
