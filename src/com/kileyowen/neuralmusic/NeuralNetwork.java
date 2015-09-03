@@ -30,7 +30,7 @@ public class NeuralNetwork {
 		this.numInputs = numInputs;
 		this.layers = layers;
 	}
-
+	
 	public NeuralNetwork clone() {
 		NeuralNetwork copy = cloneWeightless();
 		copy.setAllNeuronWeights(getAllNeuronWeights());

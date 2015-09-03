@@ -3,6 +3,7 @@ package com.kileyowen.neuralmusic;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
@@ -97,16 +98,25 @@ public class Synthesizer {
 	}
 
 	public static void main(String[] args) {
+		int noteCount = 1, numLayers = 3;
+		Scanner scan = new Scanner(System.in);
 		Synthesizer synth = new Synthesizer(20, 4400);
-		NeuralRecorder recorder = new NeuralRecorder("/assets/", "neural.dat");
+		NeuralRecorder recorder = new NeuralRecorder("assets/" + noteCount
+				+ "/", "neural.dat");
 		NeuralNetwork network;
 		if ((network = recorder.readNeural()) == null) {
-			network = new NeuralNetwork(1, (int) (10 * 2), 1, -1, 1);
+			network = new NeuralNetwork(2, (int) (noteCount * 2), numLayers, -1, 1);
 		}
 		List<Double> input = new ArrayList<Double>();
-		input.add(0.5);
-		synth.playNotesNeural(network.fire(input));
-		recorder.writeNeural(network);
+		input.add(.5);
+		input.add(1d);
+		do {
+			List<Double> result = network.fire(input);
+			synth.playNotesNeural(result);
+			recorder.writeNeural(network);
+			System.out.println("Enter 0 to exit");
+		} while (scan.nextInt() != 0);
 		synth.stop();
+		scan.close();
 	}
 }
